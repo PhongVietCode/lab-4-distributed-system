@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, split, to_timestamp
+from pyspark.sql.functions import col, split, to_timestamp, udf
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType
 
 # Kafka Configuration
@@ -12,42 +12,42 @@ WATER_TOPIC = "WATER"
 air_schema = StructType([
     StructField("data_type", StringType(), True),
     StructField("timestamp", TimestampType(), True),
-    StructField("air_station", StringType(), True),
-    StructField("air_temperature", DoubleType(), True),
-    StructField("air_moisture", DoubleType(), True),
-    StructField("air_light", DoubleType(), True),
-    StructField("air_total_rainfall", DoubleType(), True),
-    StructField("air_rainfall", DoubleType(), True),
-    StructField("air_wind_direction", DoubleType(), True),
-    StructField("air_pm25", DoubleType(), True),
-    StructField("air_pm10", DoubleType(), True),
-    StructField("air_co", DoubleType(), True),
-    StructField("air_nox", DoubleType(), True),
-    StructField("air_so2", DoubleType(), True)
+    StructField("station", StringType(), True),
+    StructField("temperature", DoubleType(), True),
+    StructField("moisture", DoubleType(), True),
+    StructField("light", DoubleType(), True),
+    StructField("total_rainfall", DoubleType(), True),
+    StructField("rainfall", DoubleType(), True),
+    StructField("wind_direction", DoubleType(), True),
+    StructField("pm25", DoubleType(), True),
+    StructField("pm10", DoubleType(), True),
+    StructField("co", DoubleType(), True),
+    StructField("nox", DoubleType(), True),
+    StructField("so2", DoubleType(), True)
 ])
 
 earth_schema = StructType([
     StructField("data_type", StringType(), True),
     StructField("timestamp", TimestampType(), True),
-    StructField("earth_station", StringType(), True),
-    StructField("earth_moisture", DoubleType(), True),
-    StructField("earth_temperature", DoubleType(), True),
-    StructField("earth_salinity", DoubleType(), True),
-    StructField("earth_ph", DoubleType(), True),
-    StructField("earth_water_root", DoubleType(), True),
-    StructField("earth_water_leaf", DoubleType(), True),
-    StructField("earth_water_level", DoubleType(), True),
-    StructField("earth_voltage", DoubleType(), True)
+    StructField("station", StringType(), True),
+    StructField("moisture", DoubleType(), True),
+    StructField("temperature", DoubleType(), True),
+    StructField("salinity", DoubleType(), True),
+    StructField("ph", DoubleType(), True),
+    StructField("water_root", DoubleType(), True),
+    StructField("water_leaf", DoubleType(), True),
+    StructField("water_level", DoubleType(), True),
+    StructField("voltage", DoubleType(), True)
 ])
 
 water_schema = StructType([
     StructField("data_type", StringType(), True),
     StructField("timestamp", TimestampType(), True),
-    StructField("water_station", StringType(), True),
-    StructField("water_ph", DoubleType(), True),
-    StructField("water_do", DoubleType(), True),
-    StructField("water_temperature", DoubleType(), True),
-    StructField("water_salinity", DoubleType(), True)
+    StructField("station", StringType(), True),
+    StructField("ph", DoubleType(), True),
+    StructField("do", DoubleType(), True),
+    StructField("temperature", DoubleType(), True),
+    StructField("salinity", DoubleType(), True)
 ])
 
 
@@ -168,7 +168,7 @@ def read_air_stream(spark, kafka_servers, topic):
     # Deserialize Kafka messages
     air_stream = kafka_stream \
         .selectExpr("CAST(value AS BINARY) as raw_value") \
-        .withColumn("data", deserialize_udf("raw_value")) \
+        .withColumn("data", deserialize_air_udf("raw_value")) \
         .select(
             col("data.data_type").alias("data_type"),
             to_timestamp(col("data.timestamp"), "yyyy-MM-dd'T'HH:mm:ss").alias("timestamp"),
