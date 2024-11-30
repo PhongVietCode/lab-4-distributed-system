@@ -247,9 +247,7 @@ earth_stream = read_earth_stream(spark, KAFKA_BOOTSTRAP_SERVERS, EARTH_TOPIC)
 water_stream = read_water_stream(spark, KAFKA_BOOTSTRAP_SERVERS, WATER_TOPIC)
 
 # # Step 4: Join the Streams on Timestamp and Station
-# joined_stream = air_stream \
-#     .join(earth_stream, ["timestamp"], "inner") \
-#     .join(water_stream, ["timestamp"], "inner")
+
 
 # Write input streams to console
 air_stream.writeStream.format("console").outputMode("append").start()
@@ -257,6 +255,9 @@ earth_stream.writeStream.format("console").outputMode("append").start()
 water_stream.writeStream.format("console").outputMode("append").start()
 
 # Debug joined stream
+joined_stream = air_stream \
+    .join(earth_stream, ["timestamp"], "inner") \
+    .join(water_stream, ["timestamp"], "inner")
 joined_stream.writeStream.format("console").outputMode("append").start()
 
 # Write joined stream to HDFS
