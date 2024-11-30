@@ -141,17 +141,25 @@ def main():
     air_df = read_stream(spark, "AIR", air_schema)
     earth_df = read_stream(spark, "EARTH", earth_schema)
     water_df = read_stream(spark, "WATER", water_schema)
+    air_df = air_df.withColumn("date", to_timestamp("date", "yyyy-MM-dd HH:mm:ss")) \
+                .dropDuplicates(["date", "station"])
 
+    earth_df = earth_df.withColumn("date", to_timestamp("date", "yyyy-MM-dd HH:mm:ss")) \
+                    .dropDuplicates(["date", "station"])
+
+    water_df = water_df.withColumn("date", to_timestamp("date", "yyyy-MM-dd HH:mm:ss")) \
+                    .dropDuplicates(["date", "station"])
     joined_df = air_df \
+        .withWatermark("date", "1 second") \
         .join(
-            earth_df,
+            earth_df.withWatermark("date", "1 second"),
             "date",
-            "inner"
+            "outer"
         ) \
         .join(
-            water_df,
+            water_df.withWatermark("date", "1 second"),
             "date",
-            "inner"
+            "outer"
         )
 
     # query = joined_df.writeStream.format("console") \
