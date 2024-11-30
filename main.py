@@ -3,7 +3,6 @@ from pyspark.sql.functions import *
 from pyspark.sql.types import *
 from io import BytesIO
 from datetime import datetime
-from utils.imputer import DataImputer
 
 import sys
 
@@ -135,7 +134,6 @@ def read_stream(spark, topic, schema):
 def main():
     spark = create_spark_session()
     air_schema, earth_schema, water_schema = create_schemas()
-    imputer = DataImputer()
     
     # air_df = imputer.process_dataframe(read_stream("air", air_schema), "air")
     # earth_df = imputer.process_dataframe(read_stream("earth", earth_schema), "earth")
