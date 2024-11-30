@@ -13,41 +13,41 @@ air_schema = StructType([
     StructField("data_type", StringType(), True),
     StructField("timestamp", TimestampType(), True),
     StructField("station", StringType(), True),
-    StructField("temperature", DoubleType(), True),
-    StructField("moisture", DoubleType(), True),
-    StructField("light", DoubleType(), True),
-    StructField("total_rainfall", DoubleType(), True),
-    StructField("rainfall", DoubleType(), True),
-    StructField("wind_direction", DoubleType(), True),
-    StructField("pm25", DoubleType(), True),
-    StructField("pm10", DoubleType(), True),
-    StructField("co", DoubleType(), True),
-    StructField("nox", DoubleType(), True),
-    StructField("so2", DoubleType(), True)
+    StructField("temperature", StringType(), True),
+    StructField("moisture", StringType(), True),
+    StructField("light", StringType(), True),
+    StructField("total_rainfall", StringType(), True),
+    StructField("rainfall", StringType(), True),
+    StructField("wind_direction", StringType(), True),
+    StructField("pm25", StringType(), True),
+    StructField("pm10", StringType(), True),
+    StructField("co", StringType(), True),
+    StructField("nox", StringType(), True),
+    StructField("so2", StringType(), True)
 ])
 
 earth_schema = StructType([
     StructField("data_type", StringType(), True),
     StructField("timestamp", TimestampType(), True),
     StructField("station", StringType(), True),
-    StructField("moisture", DoubleType(), True),
-    StructField("temperature", DoubleType(), True),
-    StructField("salinity", DoubleType(), True),
-    StructField("ph", DoubleType(), True),
-    StructField("water_root", DoubleType(), True),
-    StructField("water_leaf", DoubleType(), True),
-    StructField("water_level", DoubleType(), True),
-    StructField("voltage", DoubleType(), True)
+    StructField("moisture", StringType(), True),
+    StructField("temperature", StringType(), True),
+    StructField("salinity", StringType(), True),
+    StructField("ph", StringType(), True),
+    StructField("water_root", StringType(), True),
+    StructField("water_leaf", StringType(), True),
+    StructField("water_level", StringType(), True),
+    StructField("voltage", StringType(), True)
 ])
 
 water_schema = StructType([
     StructField("data_type", StringType(), True),
     StructField("timestamp", TimestampType(), True),
     StructField("station", StringType(), True),
-    StructField("ph", DoubleType(), True),
-    StructField("do", DoubleType(), True),
-    StructField("temperature", DoubleType(), True),
-    StructField("salinity", DoubleType(), True)
+    StructField("ph", StringType(), True),
+    StructField("do", StringType(), True),
+    StructField("temperature", StringType(), True),
+    StructField("salinity", StringType(), True)
 ])
 
 
@@ -70,17 +70,17 @@ def deserialize_air(value):
         data_type = read_string()
         timestamp = read_string()
         station = read_string()
-        temperature = float(read_string())
-        moisture = float(read_string())
-        light = float(read_string())
-        total_rainfall = float(read_string())
-        rainfall = float(read_string())
-        wind_direction = float(read_string())
-        pm25 = float(read_string())
-        pm10 = float(read_string())
-        co = float(read_string())
-        nox = float(read_string())
-        so2 = float(read_string())
+        temperature = read_string()
+        moisture = read_string()
+        light = read_string()
+        total_rainfall = read_string()
+        rainfall = read_string()
+        wind_direction = read_string()
+        pm25 = read_string()
+        pm10 = read_string()
+        co = read_string()
+        nox = read_string()
+        so2 = read_string()
 
         return (data_type, timestamp, station, temperature, moisture, light, total_rainfall,
                 rainfall, wind_direction, pm25, pm10, co, nox, so2)
@@ -105,14 +105,14 @@ def deserialize_earth(value):
         data_type = read_string()
         timestamp = read_string()
         station = read_string()
-        moisture = float(read_string())
-        temperature = float(read_string())
-        salinity = float(read_string())
-        pH = float(read_string())
-        water_Root = float(read_string())
-        water_Leaf = float(read_string())
-        water_Level = float(read_string())
-        voltage = float(read_string())
+        moisture = read_string()
+        temperature = read_string()
+        salinity = read_string()
+        pH = read_string()
+        water_Root = read_string()
+        water_Leaf = read_string()
+        water_Level = read_string()
+        voltage = read_string()
 
         return (data_type, timestamp, station, moisture, temperature, salinity, pH,
                 water_Root, water_Leaf, water_Level, voltage)
@@ -138,10 +138,10 @@ def deserialize_water(value):
         data_type = read_string()
         timestamp = read_string()
         station = read_string()
-        pH = float(read_string())
-        do = float(read_string())
-        temperature = float(read_string())
-        salinity = float(read_string())
+        pH = read_string()
+        do = read_string()
+        temperature = read_string()
+        salinity = read_string()
 
         return (data_type, timestamp, station, pH, do, temperature, salinity)
     except Exception as e:
