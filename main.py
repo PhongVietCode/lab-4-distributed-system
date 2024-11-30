@@ -143,14 +143,13 @@ def main():
     water_df = read_stream(spark, "WATER", water_schema)
 
     joined_df = air_df \
-        .withWatermark("date", "1 second") \
         .join(
-            earth_df.withWatermark("date", "1 second"),
+            earth_df,
             "date",
             "inner"
         ) \
         .join(
-            water_df.withWatermark("date", "1 second"),
+            water_df,
             "date",
             "inner"
         )
