@@ -1,11 +1,16 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
-Ls
 from io import BytesIO
 from datetime import datetime
 from utils.imputer import DataImputer
 
+import sys
+
+# Redirect stdout and stderr to a log file
+log_file = open("terminal_logs.txt", "w")
+sys.stdout = log_file
+sys.stderr = log_file
 
 kafka_params = {
     "kafka.bootstrap.servers": "192.168.0.68:9092",
@@ -21,7 +26,7 @@ def create_spark_session():
 
 def create_schemas():
     air_schema = StructType([
-        StructField("type", TimestampType(), True),
+        StructField("type", StringType(), True),
         StructField("date", TimestampType(), True),
         StructField("air_station", StringType(), True),
         StructField("air_temperature", DoubleType(), True),
@@ -38,7 +43,7 @@ def create_schemas():
     ])
 
     earth_schema = StructType([
-        StructField("type", TimestampType(), True),
+        StructField("type", StringType(), True),
         StructField("date", TimestampType(), True),
         StructField("earth_station", StringType(), True),
         StructField("earth_moisture", DoubleType(), True),
@@ -52,7 +57,7 @@ def create_schemas():
     ])
 
     water_schema = StructType([
-        StructField("type", TimestampType(), True),
+        StructField("type", StringType(), True),
         StructField("date", TimestampType(), True),
         StructField("water_station", StringType(), True),
         StructField("water_ph", DoubleType(), True),
@@ -170,3 +175,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Example code to generate terminal logs
+    print("This is standard output.")
+    raise Exception("This is an error message.")
+
+    # Close the log file at the end
+    log_file.close()
