@@ -186,7 +186,7 @@ def read_air_stream(spark, kafka_servers, topic):
             col("data.so2").alias("so2")
         )
 
-    return air_stream,
+    return air_stream
 
 def read_earth_stream(spark, kafka_servers, topic):
     kafka_stream = spark.readStream \
