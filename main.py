@@ -138,9 +138,9 @@ def main():
     # air_df = imputer.process_dataframe(read_stream("air", air_schema), "air")
     # earth_df = imputer.process_dataframe(read_stream("earth", earth_schema), "earth")
     # water_df = imputer.process_dataframe(read_stream("water", water_schema), "water")
-    air_df = read_stream(spark, "air", air_schema)
-    earth_df = read_stream(spark, "earth", earth_schema)
-    water_df = read_stream(spark, "water", water_schema)
+    air_df = read_stream(spark, "AIR", air_schema)
+    earth_df = read_stream(spark, "EARTH", earth_schema)
+    water_df = read_stream(spark, "WATER", water_schema)
 
     joined_df = air_df \
         .withWatermark("date", "1 second") \
