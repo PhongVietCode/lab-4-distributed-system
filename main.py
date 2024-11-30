@@ -1,273 +1,172 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, split, to_timestamp, udf
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType
-
-# Kafka Configuration
-KAFKA_BOOTSTRAP_SERVERS = "192.168.0.68:9092"  # Replace with your Kafka broker addresses
-AIR_TOPIC = "AIR"
-EARTH_TOPIC = "EARTH"
-WATER_TOPIC = "WATER"
-
-# Define Schemas for Each Topic
-air_schema = StructType([
-    StructField("data_type", StringType(), True),
-    StructField("timestamp", TimestampType(), True),
-    StructField("station", StringType(), True),
-    StructField("temperature", StringType(), True),
-    StructField("moisture", StringType(), True),
-    StructField("light", StringType(), True),
-    StructField("total_rainfall", StringType(), True),
-    StructField("rainfall", StringType(), True),
-    StructField("wind_direction", StringType(), True),
-    StructField("pm25", StringType(), True),
-    StructField("pm10", StringType(), True),
-    StructField("co", StringType(), True),
-    StructField("nox", StringType(), True),
-    StructField("so2", StringType(), True)
-])
-
-earth_schema = StructType([
-    StructField("data_type", StringType(), True),
-    StructField("timestamp", TimestampType(), True),
-    StructField("station", StringType(), True),
-    StructField("moisture", StringType(), True),
-    StructField("temperature", StringType(), True),
-    StructField("salinity", StringType(), True),
-    StructField("ph", StringType(), True),
-    StructField("water_root", StringType(), True),
-    StructField("water_leaf", StringType(), True),
-    StructField("water_level", StringType(), True),
-    StructField("voltage", StringType(), True)
-])
-
-water_schema = StructType([
-    StructField("data_type", StringType(), True),
-    StructField("timestamp", TimestampType(), True),
-    StructField("station", StringType(), True),
-    StructField("ph", StringType(), True),
-    StructField("do", StringType(), True),
-    StructField("temperature", StringType(), True),
-    StructField("salinity", StringType(), True)
-])
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+Ls
+from io import BytesIO
+from datetime import datetime
+from utils.imputer import DataImputer
 
 
+kafka_params = {
+    "kafka.bootstrap.servers": "192.168.0.68:9092",
+    "subscribe": "air,earth,water",
+    "startingOffsets": "earliest"
+}
 
-def deserialize_air(value):
-    try:
-        buffer = memoryview(value)
-        offset = 0
+def create_spark_session():
+    return SparkSession.builder \
+        .appName("EnvironmentalSensorProcessing") \
+        .config("spark.sql.streaming.checkpointLocation", "hdfs://node1:9000/checkpoint") \
+        .getOrCreate()
 
-        # Helper function to read a length-prefixed UTF-8 string
-        def read_string():
-            nonlocal offset
-            length = struct.unpack_from(">I", buffer, offset)[0]  # Read string length
-            offset += 4
-            string_value = buffer[offset:offset + length].tobytes().decode("utf-8")  # Read the actual string
-            offset += length
-            return string_value
+def create_schemas():
+    air_schema = StructType([
+        StructField("type", TimestampType(), True),
+        StructField("date", TimestampType(), True),
+        StructField("air_station", StringType(), True),
+        StructField("air_temperature", DoubleType(), True),
+        StructField("air_moisture", DoubleType(), True),
+        StructField("air_light", DoubleType(), True),
+        StructField("air_total_rainfall", DoubleType(), True),
+        StructField("air_rainfall", DoubleType(), True),
+        StructField("air_wind_direction", DoubleType(), True),
+        StructField("air_pm25", DoubleType(), True),
+        StructField("air_pm10", DoubleType(), True),
+        StructField("air_co", DoubleType(), True),
+        StructField("air_nox", DoubleType(), True),
+        StructField("air_so2", DoubleType(), True)
+    ])
 
-        # Deserialize each field
-        data_type = read_string()
-        timestamp = read_string()
-        station = read_string()
-        temperature = read_string()
-        moisture = read_string()
-        light = read_string()
-        total_rainfall = read_string()
-        rainfall = read_string()
-        wind_direction = read_string()
-        pm25 = read_string()
-        pm10 = read_string()
-        co = read_string()
-        nox = read_string()
-        so2 = read_string()
+    earth_schema = StructType([
+        StructField("type", TimestampType(), True),
+        StructField("date", TimestampType(), True),
+        StructField("earth_station", StringType(), True),
+        StructField("earth_moisture", DoubleType(), True),
+        StructField("earth_temperature", DoubleType(), True),
+        StructField("earth_salinity", DoubleType(), True),
+        StructField("earth_ph", DoubleType(), True),
+        StructField("earth_water_root", DoubleType(), True),
+        StructField("earth_water_leaf", DoubleType(), True),
+        StructField("earth_water_level", DoubleType(), True),
+        StructField("earth_voltage", DoubleType(), True)
+    ])
 
-        return (data_type, timestamp, station, temperature, moisture, light, total_rainfall,
-                rainfall, wind_direction, pm25, pm10, co, nox, so2)
-    except Exception as e:
-        # Handle parsing error
-        return None
+    water_schema = StructType([
+        StructField("type", TimestampType(), True),
+        StructField("date", TimestampType(), True),
+        StructField("water_station", StringType(), True),
+        StructField("water_ph", DoubleType(), True),
+        StructField("water_do", DoubleType(), True),
+        StructField("water_temperature", DoubleType(), True),
+        StructField("water_salinity", DoubleType(), True)
+    ])
 
-def deserialize_earth(value):
-    try:
-        buffer = memoryview(value)
-        offset = 0
+    return air_schema, earth_schema, water_schema
 
-        def read_string():
-            nonlocal offset
-            length = struct.unpack_from(">I", buffer, offset)[0]
-            offset += 4
-            string_value = buffer[offset:offset + length].tobytes().decode("utf-8")
-            offset += length
-            return string_value
+def read_stream(spark, topic, schema):
+    stream = spark.readStream \
+                    .format("kafka") \
+                    .options(**kafka_params) \
+                    .option("subscribe", topic) \
+                    .load()
+    
+    def deserialize(binary_data):
+        if binary_data is None:
+            result = []
+            for field in schema.fields:
+                result.append(None)
+            return result
+        try:
+            buf = BytesIO(binary_data)
+            result = []
+            
+            for field in schema.fields:
+                length_bytes = buf.read(4)
+                if not length_bytes:
+                    result = []
+                    for field in schema.fields:
+                        result.append(None)
+                    return result
+                length = int.from_bytes(length_bytes, byteorder='big')
 
-        # Deserialize fields
-        data_type = read_string()
-        timestamp = read_string()
-        station = read_string()
-        moisture = read_string()
-        temperature = read_string()
-        salinity = read_string()
-        pH = read_string()
-        water_Root = read_string()
-        water_Leaf = read_string()
-        water_Level = read_string()
-        voltage = read_string()
+                value_bytes = buf.read(length)
+                if not value_bytes:
+                    result = []
+                    for field in schema.fields:
+                        result.append(None)
+                    return result
+                value_str = value_bytes.decode('utf-8')
+                
+                if value_str == "null":
+                    result.append(None)
+                    continue
+                
+                try:
+                    if isinstance(field.dataType, TimestampType):
+                        dt = datetime.strptime(value_str, '%d/%m/%Y %H:%M:%S')
+                        result.append(dt)
+                    elif isinstance(field.dataType, DoubleType):
+                        result.append(float(value_str))
+                    else:
+                        result.append(value_str)
+                except:
+                    result.append(None)
+            
+            return tuple(result)
+        except Exception as e:
+            result = []
+            for field in schema.fields:
+                result.append(None)
+            return result
 
-        return (data_type, timestamp, station, moisture, temperature, salinity, pH,
-                water_Root, water_Leaf, water_Level, voltage)
-    except Exception as e:
-        # Handle parsing errors
-        print(f"Error deserializing Earth data: {e}")
-        return None
+    deserializer = udf(deserialize, schema)
 
-def deserialize_water(value):
-    try:
-        buffer = memoryview(value)
-        offset = 0
+    returned_stream = stream.select(deserializer(col("value")).alias("deserialized")) \
+                            .select("deserialized.*") \
+                            .filter(col("date").isNotNull())
 
-        def read_string():
-            nonlocal offset
-            length = struct.unpack_from(">I", buffer, offset)[0]
-            offset += 4
-            string_value = buffer[offset:offset + length].tobytes().decode("utf-8")
-            offset += length
-            return string_value
+    return returned_stream
 
-        # Deserialize fields
-        data_type = read_string()
-        timestamp = read_string()
-        station = read_string()
-        pH = read_string()
-        do = read_string()
-        temperature = read_string()
-        salinity = read_string()
+def main():
+    spark = create_spark_session()
+    air_schema, earth_schema, water_schema = create_schemas()
+    imputer = DataImputer()
+    
+    # air_df = imputer.process_dataframe(read_stream("air", air_schema), "air")
+    # earth_df = imputer.process_dataframe(read_stream("earth", earth_schema), "earth")
+    # water_df = imputer.process_dataframe(read_stream("water", water_schema), "water")
+    air_df = read_stream(spark, "air", air_schema)
+    earth_df = read_stream(spark, "earth", earth_schema)
+    water_df = read_stream(spark, "water", water_schema)
 
-        return (data_type, timestamp, station, pH, do, temperature, salinity)
-    except Exception as e:
-        # Handle parsing errors
-        print(f"Error deserializing Water data: {e}")
-        return None
-
-# Register the Deserialization Function as a UDF
-deserialize_air_udf = udf(deserialize_air, air_schema)
-deserialize_earth_udf = udf(deserialize_earth, earth_schema)
-deserialize_water_udf = udf(deserialize_water, water_schema)
-
-
-def read_air_stream(spark, kafka_servers, topic):
-    spark = SparkSession.builder.getOrCreate()
-
-    kafka_stream = spark.readStream \
-        .format("kafka") \
-        .option("kafka.bootstrap.servers", kafka_servers) \
-        .option("subscribe", topic) \
-        .option("startingOffsets", "earliest") \
-        .load()
-
-    # Deserialize Kafka messages
-    air_stream = kafka_stream \
-        .selectExpr("CAST(value AS BINARY) as raw_value") \
-        .withColumn("data", deserialize_air_udf("raw_value")) \
-        .select(
-            col("data.data_type").alias("data_type"),
-            to_timestamp(col("data.timestamp"), "yyyy-MM-dd'T'HH:mm:ss").alias("timestamp"),
-            col("data.station").alias("station"),
-            col("data.temperature").alias("temperature"),
-            col("data.moisture").alias("moisture"),
-            col("data.light").alias("light"),
-            col("data.total_rainfall").alias("total_rainfall"),
-            col("data.rainfall").alias("rainfall"),
-            col("data.wind_direction").alias("wind_direction"),
-            col("data.pm25").alias("pm25"),
-            col("data.pm10").alias("pm10"),
-            col("data.co").alias("co"),
-            col("data.nox").alias("nox"),
-            col("data.so2").alias("so2")
+    joined_df = air_df \
+        .withWatermark("date", "1 second") \
+        .join(
+            earth_df.withWatermark("date", "1 second"),
+            "date",
+            "inner"
+        ) \
+        .join(
+            water_df.withWatermark("date", "1 second"),
+            "date",
+            "inner"
         )
 
-    return air_stream
+    # query = joined_df.writeStream.format("console") \
+    #                              .option("truncate", False) \
+    #                              .option("numRows", 10) \
+    #                              .option("maxColumnWidth", 100) \
+    #                              .start()
 
-def read_earth_stream(spark, kafka_servers, topic):
-    kafka_stream = spark.readStream \
-        .format("kafka") \
-        .option("kafka.bootstrap.servers", kafka_servers) \
-        .option("subscribe", topic) \
-        .option("startingOffsets", "earliest") \
-        .load()
+    query = joined_df.writeStream \
+                     .format("csv") \
+                     .option("path", "hdfs://node1:9000/environment_datas") \
+                     .option("checkpointLocation", "hdfs://node1:9000/checkpoint") \
+                     .option("header", "true") \
+                     .trigger(processingTime="1 second") \
+                     .start()
 
-    earth_stream = kafka_stream.selectExpr("CAST(value AS BINARY) as raw_value") \
-        .withColumn("data", deserialize_earth_udf("raw_value")) \
-        .select(
-            col("data.data_type").alias("data_type"),
-            to_timestamp(col("data.timestamp"), "dd/MM/yyyy HH:mm:ss").alias("timestamp"),
-            col("data.station").alias("station"),
-            col("data.moisture").alias("moisture"),
-            col("data.temperature").alias("temperature"),
-            col("data.salinity").alias("salinity"),
-            col("data.pH").alias("pH"),
-            col("data.water_Root").alias("water_Root"),
-            col("data.water_Leaf").alias("water_Leaf"),
-            col("data.water_Level").alias("water_Level"),
-            col("data.voltage").alias("voltage")
-        )
+    query.awaitTermination()
 
-    return earth_stream
-
-def read_water_stream(spark, kafka_servers, topic):
-    kafka_stream = spark.readStream \
-        .format("kafka") \
-        .option("kafka.bootstrap.servers", kafka_servers) \
-        .option("subscribe", topic) \
-        .option("startingOffsets", "earliest") \
-        .load()
-
-    water_stream = kafka_stream.selectExpr("CAST(value AS BINARY) as raw_value") \
-        .withColumn("data", deserialize_water_udf("raw_value")) \
-        .select(
-            col("data.data_type").alias("data_type"),
-            to_timestamp(col("data.timestamp"), "dd/MM/yyyy HH:mm:ss").alias("timestamp"),
-            col("data.station").alias("station"),
-            col("data.pH").alias("pH"),
-            col("data.DO").alias("DO"),
-            col("data.temperature").alias("temperature"),
-            col("data.salinity").alias("salinity")
-        )
-
-    return water_stream
-
-# Step 1: Create Spark Session
-spark = SparkSession.builder \
-    .appName("KafkaJoinToHDFS") \
-    .getOrCreate()
-
-# Step 3: Read Streams for Air, Earth, and Water Topics
-air_stream = read_air_stream(spark, KAFKA_BOOTSTRAP_SERVERS, AIR_TOPIC)
-earth_stream = read_earth_stream(spark, KAFKA_BOOTSTRAP_SERVERS, EARTH_TOPIC)
-water_stream = read_water_stream(spark, KAFKA_BOOTSTRAP_SERVERS, WATER_TOPIC)
-
-# # Step 4: Join the Streams on Timestamp and Station
-
-
-# Write input streams to console
-air_stream.writeStream.format("console").outputMode("append").start()
-earth_stream.writeStream.format("console").outputMode("append").start()
-water_stream.writeStream.format("console").outputMode("append").start()
-
-# Debug joined stream
-joined_stream = air_stream \
-    .join(earth_stream, ["timestamp"], "inner") \
-    .join(water_stream, ["timestamp"], "inner")
-joined_stream.writeStream.format("console").outputMode("append").start()
-
-# Write joined stream to HDFS
-query = joined_stream.writeStream \
-    .format("csv") \
-    .option("path", "hdfs://node1:9000/env_data_2/") \
-    .option("checkpointLocation", "hdfs://node1:9000/checkpoint/") \
-    .option("header", "true") \
-    .trigger(processingTime="5 seconds") \
-    .start()
-
-query.awaitTermination()
-
+if __name__ == "__main__":
+    main()
