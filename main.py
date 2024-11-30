@@ -246,18 +246,27 @@ air_stream = read_air_stream(spark, KAFKA_BOOTSTRAP_SERVERS, AIR_TOPIC)
 earth_stream = read_earth_stream(spark, KAFKA_BOOTSTRAP_SERVERS, EARTH_TOPIC)
 water_stream = read_water_stream(spark, KAFKA_BOOTSTRAP_SERVERS, WATER_TOPIC)
 
-# Step 4: Join the Streams on Timestamp and Station
-joined_stream = air_stream \
-    .join(earth_stream, ["timestamp"], "inner") \
-    .join(water_stream, ["timestamp"], "inner")
+# # Step 4: Join the Streams on Timestamp and Station
+# joined_stream = air_stream \
+#     .join(earth_stream, ["timestamp"], "inner") \
+#     .join(water_stream, ["timestamp"], "inner")
 
-# Step 5: Write the Joined Stream to HDFS
+# Write input streams to console
+air_stream.writeStream.format("console").outputMode("append").start()
+earth_stream.writeStream.format("console").outputMode("append").start()
+water_stream.writeStream.format("console").outputMode("append").start()
+
+# Debug joined stream
+joined_stream.writeStream.format("console").outputMode("append").start()
+
+# Write joined stream to HDFS
 query = joined_stream.writeStream \
     .format("csv") \
     .option("path", "hdfs://node1:9000/env_data_2/") \
-    .option("checkpointLocation", "hdfs://node1:9000/checkpoint") \
+    .option("checkpointLocation", "hdfs://node1:9000/checkpoint/") \
     .option("header", "true") \
-    .trigger(processingTime="10 seconds") \
+    .trigger(processingTime="5 seconds") \
     .start()
 
 query.awaitTermination()
+
